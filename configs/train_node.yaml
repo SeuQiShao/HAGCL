@@ -1,0 +1,57 @@
+pretrain:
+  batch_size: 500
+  epochs: 80
+  lr: 0.001
+  lr_decay: 0
+  num_layer: 3
+  emb_dim: 300
+  dropout_ratio: 0
+  JK: last
+  dataset: zinc_standard_agent
+  data_path: /home/shaoqi/DataSet/chem_data/dataset/
+  output_model_file: ''
+  gnn_type: gin
+  seed: 6
+  num_workers: 8
+  aug1: dropN
+  aug2: dropN
+  aug_ratio: 0.5
+  loss_temp: 0.1
+  lamda: 0.1
+  task: mol_class_pre
+  add_loop: True
+  headers: 1
+  debug: False
+  validate: False
+  save_folder: /home/shaoqi/code/HAGCL/logs
+  load_folder: 
+  pre_model_epo: 10
+  nmb_prototype: 2
+
+
+finetune:
+  batch_size: 32
+  lr: 0.001
+  lr_scale: 1
+  lr_decay: 0
+  num_layer: 3
+  emb_dim: 300
+  dropout_ratio: 0.5
+  graph_pooling: mean
+  JK: last
+  gnn_type: gin
+  dataset: muv
+  data_path: /home/shaoqi/DataSet/chem_data/dataset/
+  input_model_file: /home/shaoqi/code/HAGCL/logs/mol_class_pre/pre_model1
+  filename: ''
+  seed: 42
+  runseed: 5
+  split: scaffold
+  eval_train: 0
+  num_workers: 8
+  task: mol_class_fine
+  add_loop: True
+  headers: 1
+  model_epo: 20
+  save_folder: /home/shaoqi/code/HAGCL/logs
+  load_folder: 
