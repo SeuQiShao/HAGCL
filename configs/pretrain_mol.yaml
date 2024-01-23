@@ -13,11 +13,15 @@ pretrain:
   gnn_type: gin
   seed: 6
   num_workers: 8
+  aug0: hete_none
   aug1: dropN
   aug2: dropN
   aug_ratio: 0.5
   loss_temp: 0.1
-  lamda: 0.1
+  lamda1: 0
+  lamda2: 1
+  lamda3: 0
+  lamda4: 1
   task: mol_class_pre
   add_loop: True
   headers: 1

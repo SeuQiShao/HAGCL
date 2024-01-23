@@ -266,6 +266,12 @@ class TUDataset_aug(InMemoryDataset):
             # data_aug.x = torch.ones((data.edge_index.max() + 1, 1))
             # data_cp = deepcopy(data)
             # data_cp.x = torch.ones((data.edge_index.max() + 1, 1))
+        elif self.aug == 'hete_none':
+            batch = deepcopy(data)
+            batch.node_type = torch.ones(batch.x.shape[0]).long()
+            batch.edge_type = torch.zeros(batch.edge_index.shape[1]).long()
+            data_aug = batch.to_heterogeneous(node_type_names = ['0','1'], edge_type_names = [('1', '0', '1'), ('1', '1', '0'), ('0', '2', '1'), ('0', '3', '0')])
+
         else:
             print('augmentation error')
             assert False

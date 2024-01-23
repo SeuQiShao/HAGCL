@@ -3,7 +3,7 @@ import torch
 import torch.optim as optim
 from torch.optim import lr_scheduler
 
-from model import basemodel_mol, model_CL, basemodel_tu
+from model import basemodel_mol, model_CL, basemodel_tu, basemodel_tu2, basemodel_pd
 from model import model_utils
 
 
@@ -17,13 +17,29 @@ def load_imp(args):
             args.JK
         )
     elif args.task == 'tu':
-        Imp = basemodel_tu.GNN_imp_estimator(
-            args.num_layer,
+        # Imp = basemodel_tu2.GNN_imp_estimator(
+        #     args.num_layer,
+        #     args.dataset_num_features,
+        #     args.dataset_num_attr,
+        #     args.emb_dim
+        # )
+        Imp = basemodel_tu.Explainer(
             args.dataset_num_features,
-            args.dataset_num_attr,
-            args.emb_dim
+            args.emb_dim,
+            args.num_layer,
         )
-
+    elif args.task == 'pd':
+        # Imp = basemodel_tu2.GNN_imp_estimator(
+        #     args.num_layer,
+        #     args.dataset_num_features,
+        #     args.dataset_num_attr,
+        #     args.emb_dim
+        # )
+        Imp = basemodel_pd.Explainer(
+            args.dataset_num_features,
+            args.emb_dim,
+            args.num_layer,
+        )
 
 
     if args.load_folder:
@@ -56,9 +72,27 @@ def load_gnn(args):
             args.JK,
             args.dropout_ratio,
             args.gnn_type,
-            args.add_loop,
-            args.headers   
         )
+        # gnn = basemodel_tu2.HGNN(
+        #     args.num_layer,
+        #     args.emb_dim,
+        #     args.dataset_num_features,
+        #     args.dataset_num_attr,
+        #     args.JK,
+        #     args.dropout_ratio,
+        #     args.gnn_type,
+        # )
+    elif args.task == 'pd':
+        gnn = basemodel_pd.HGNN(
+            args.num_layer,
+            args.emb_dim,
+            args.dataset_num_features,
+            args.dataset_num_attr,
+            args.JK,
+            args.dropout_ratio,
+            args.gnn_type,
+        )
+
 
     if args.load_folder:
         print("Loading model file")
@@ -73,7 +107,7 @@ def load_gnn(args):
 def load_model(args):
     Imp = load_imp(args)  
     gnn = load_gnn(args)
-    if args.task == 'mol_class_pre' or args.task == 'tu':
+    if args.task == 'mol_class_pre' or args.task == 'tu' or args.task == 'pd':
         model = model_CL.graphcl(args, gnn, Imp)
         optimizer = optim.Adam(
             list(model.parameters()),

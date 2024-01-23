@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import numpy as np
 from copy import deepcopy
 import tqdm
+from utils.data_loader_mol import hete_nodes
 
 class SpatialHeteroModel(nn.Module):
     '''Spatial heterogeneity modeling by using a soft-clustering paradigm.
@@ -79,10 +80,24 @@ class graphcl(nn.Module):
         self.gnn = gnn
         self.args = args
         self.node_imp_estimator = node_imp_estimator
-        self.pool = global_mean_pool
+        graph_pooling = self.args.graph_pooling
+        if graph_pooling == "sum":
+            self.pool = global_add_pool
+        elif graph_pooling == "mean":
+            self.pool = global_mean_pool
+        elif graph_pooling == "max":
+            self.pool = global_max_pool
         self.emb_dim = args.emb_dim
-        self.projection_head = nn.Sequential(nn.Linear(args.emb_dim, args.emb_dim), nn.ReLU(inplace=True), nn.Linear(args.emb_dim, args.emb_dim))
-        self.prototype_loss = SpatialHeteroModel(args.emb_dim, args.nmb_prototype, args.batch_size)
+        if args.JK == 'last':
+            emb = args.emb_dim
+        elif args.JK == 'all':
+            emb = args.emb_dim * args.num_layer + args.dataset_num_features
+        else:
+            emb = args.emb_dim * args.num_layer
+        self.projection_head = nn.Sequential(nn.Linear(emb, args.emb_dim), nn.ReLU(inplace=True), nn.Linear(args.emb_dim, args.emb_dim))
+        self.prototype_loss = SpatialHeteroModel(emb, args.nmb_prototype, args.batch_size)
+        self.prototype_loss2 = SpatialHeteroModel(emb, args.nmb_prototype, args.batch_size)
+
 
     def forward(self,batch_):
         imp_batch = batch_.to_homogeneous()
@@ -92,18 +107,21 @@ class graphcl(nn.Module):
         #cal score
         out, _ = torch_scatter.scatter_max(torch.reshape(node_imp, (1, -1)), batch)
         out = out.reshape(-1, 1)
-        out = out[batch]
+        out = out[batch]    
         node_imp /= (out * 10)
         node_imp += 0.9
-        node_imp = node_imp.expand(-1, self.emb_dim)
+        #node_imp = node_imp.expand(-1, self.emb_dim)
 
-        x = torch.mul(x, node_imp)
+        x = x * node_imp
         x_graph = self.pool(x, batch)
         x_graph = self.projection_head(x_graph)
         return x_graph, x
 
-    def loss_cl(self, x1, x2, temp):
+    def loss_cl(self, x1, x2, temp, task = 'graph'):
         T = temp
+        if task == 'node':
+            x1 = self.projection_head(x1)
+            x2 = self.projection_head(x2)
         batch_size, _ = x1.size()
         x1_abs = x1.norm(dim=1)
         x2_abs = x2.norm(dim=1)
@@ -115,8 +133,11 @@ class graphcl(nn.Module):
         loss = - torch.log(loss).mean()
         return loss
 
-    def loss_infonce(self, x1, x2, temp = 0.1):
+    def loss_infonce(self, x1, x2, temp = 0.1, task = 'graph'):
         T = temp
+        if task == 'node':
+            x1 = self.projection_head(x1)
+            x2 = self.projection_head(x2)
         batch_size, _ = x1.size()
         x1_abs = x1.norm(dim=1)
         x2_abs = x2.norm(dim=1)
@@ -127,6 +148,8 @@ class graphcl(nn.Module):
         loss = pos_sim / sim_matrix.sum(dim=1)
         loss = - torch.log(loss).mean()
         return loss
+    
+ 
 
     def loss_ra(self, x1, x2, x3, temp, lamda):
         batch_size, _ = x1.size()
@@ -156,6 +179,10 @@ class graphcl(nn.Module):
         loss = self.prototype_loss(z1, z2)
         return loss
     
+    def loss_pro2(self, z1,z2):
+        loss = self.prototype_loss2(z1, z2)
+        return loss
+    
 
     def get_embeddings(self, loader):
         print('start generate embeddings....')
@@ -165,10 +192,16 @@ class graphcl(nn.Module):
         with torch.no_grad():
             for step, batch in tqdm.tqdm(enumerate(loader)):
                 batch.to(device)
-                batch.node_type = torch.ones(batch.x.shape[0]).long()
-                batch.edge_type = torch.zeros(batch.edge_index.shape[1]).long()
-                hete_batch = batch.to_heterogeneous(node_type_names = ['0','1'], edge_type_names = [('1', '0', '1'), ('1', '1', '0'), ('0', '2', '1'), ('0', '3', '0')])
-                _, x = self.forward(hete_batch)
+                if self.args.use_imp:
+                    imp = self.node_imp_estimator(batch)
+                    hete_batch = hete_nodes(batch.cpu(),self.args.aug_ratio,imp.cpu())
+                    hete_batch.to(device)
+                    batch.to(device)
+                else:
+                    batch.node_type = torch.ones(batch.x.shape[0]).long()
+                    batch.edge_type = torch.zeros(batch.edge_index.shape[1]).long()
+                    hete_batch = batch.to_heterogeneous(node_type_names = ['0','1'], edge_type_names = [('1', '0', '1'), ('1', '1', '0'), ('0', '2', '1'), ('0', '3', '0')])
+                x = self.gnn(hete_batch)
                 x = self.pool(x, batch.batch)    
                 ret.append(x.cpu().numpy())
                 y.append(batch.y.cpu().numpy())
@@ -178,7 +211,24 @@ class graphcl(nn.Module):
         ret = np.concatenate(ret, 0)
         y = np.concatenate(y, 0)
         return ret, y
-
+    
+    def get_embeddings_v(self, loader):
+        print('start generate embeddings....')
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        ret = []
+        y = []
+        with torch.no_grad():
+            for step, batch in enumerate(loader):
+                batch.to(device)
+                batch.node_type = torch.ones(batch.x.shape[0]).long()
+                batch.edge_type = torch.zeros(batch.edge_index.shape[1]).long()
+                hete_batch = batch.to_heterogeneous(node_type_names = ['0','1'], edge_type_names = [('1', '0', '1'), ('1', '1', '0'), ('0', '2', '1'), ('0', '3', '0')])
+                x = self.gnn(hete_batch)
+                if self.args.use_imp:
+                    imp = self.node_imp_estimator(batch)
+                    imp = imp/10 + 0.9
+                    x = x * imp
+        return x, batch.y
 
 
 

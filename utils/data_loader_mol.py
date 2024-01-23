@@ -754,6 +754,51 @@ def hete_nodes_prob(data, rate, node_score, cp = False):
     hete_data = data.to_heterogeneous(node_type_names = ['0','1'], edge_type_names = [('1', '0', '1'), ('1', '1', '0'), ('0', '2', '1'), ('0', '3', '0')])
     return hete_data
 
+def hete_nodes(data, rate, node_score, cp = False):
+    
+    node_num, _ = data.x.size()
+    p_label = torch.zeros(node_num)
+    _, edge_num = data.edge_index.size()
+    drop_num = int(node_num * rate)
+    if cp == False:
+        node_prob = node_score.float()
+    else:
+        node_prob = max(node_score.float()) - node_score.float()
+    node_prob += 0.001
+    node_prob = np.array(node_prob)
+    node_prob /= node_prob.sum()
+
+    idx_nondrop = node_prob > np.quantile(node_prob, rate)
+    p_label[idx_nondrop.squeeze()] = 1
+    p_label = p_label.int().long()
+    #G = to_networkx(data)
+    pos_node_index = torch.arange(node_num)[p_label == 1]
+    neg_node_index = torch.arange(node_num)[p_label == 0]
+    pos_node_num = len(pos_node_index)
+    neg_node_num = len(neg_node_index)
+   
+    data.node_type = p_label
+    edge_type = []
+    for i in range(edge_num):
+            edge_i = data.edge_index[:,i]
+            if edge_i[0] in pos_node_index:
+                if edge_i[1] in pos_node_index:
+                    edge_type.append(0)
+                else:
+                    edge_type.append(1)
+            else:
+                if edge_i[1] in pos_node_index:
+                    edge_type.append(2)
+                else:
+                    edge_type.append(3)
+
+    data.edge_type = torch.tensor(edge_type)
+    hete_data = data.to_heterogeneous(node_type_names = ['0','1'], edge_type_names = [('1', '0', '1'), ('1', '1', '0'), ('0', '2', '1'), ('0', '3', '0')])
+    return hete_data
+
+
+
+
 
 def drop_nodes_prob(data, aug_ratio, node_score):
 

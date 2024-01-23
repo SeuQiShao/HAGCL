@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # Set the path to the YAML configuration file
-config_path='/home/shaoqi/code/HAGCL_test/configs/train_graph.yaml'
+config_path='/home/shaoqi/code/HAGCL_test/configs/train_node.yaml'
 
 # List of datasets
-datasets=("NCI1" "PROTEINS" "DD" "MUTAG" "COLLAB" "REDDIT-BINARY" "REDDIT-MULTI-5K" "IMDB-BINARY")
-# datasets=("COLLAB" "REDDIT-BINARY" "REDDIT-MULTI-5K" "IMDB-BINARY" "NCI1" "PROTEINS" "DD" "MUTAG")
+datasets=("Cora" "Citeseer" "Pubmed" "wikics" "amc" "amp" "coc")
+
 
 # Range of seeds
-seed_range=(0 1 2 3 4)
+seed_range=(0 1 2 3 4 5 6 7 8 9)
 
 # Iterate over datasets
 for seed in "${seed_range[@]}"; do
@@ -19,7 +19,7 @@ for seed in "${seed_range[@]}"; do
     sed -i "/^dataset:/s/.*/dataset: $dataset/" "$config_path"
 
     # Execute the Python script with the modified YAML file
-    python3 /home/shaoqi/code/HAGCL_test/train_graph.py "$config_path"
+    python3 /home/shaoqi/code/HAGCL_test/train_node.py "$config_path"
   done
 done
 
