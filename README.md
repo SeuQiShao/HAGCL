@@ -5,7 +5,7 @@
 bash Config/XXX/sh
 
 ## Requirements:
-pytorh
+pytorch
 
 torch-geometric
 
